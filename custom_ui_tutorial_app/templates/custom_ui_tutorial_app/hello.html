@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% load static %}
+
+{% block content %}
+<div class="main-content-wrapper">
+    <main class="main-content">
+        <div class="container-fluid">
+            <h1>Hello World</h1>
+
+            <div class="card">
+                <div class="card-header">
+                    Run "echo" for different languages
+                </div>
+                <div class="card-body">
+                    <select id="greeting-select"></select>
+                    <button id="run-button" class="btn btn-primary">Run</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    Experiments
+                </div>
+                <div class="card-body">
+                    <button id="refresh-button" class="btn btn-secondary">Refresh</button>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Application</th>
+                                <th scope="col">Creation Time</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Output</th>
+                            </tr>
+                        </thead>
+                        <tbody id="experiment-list">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock content %}
+
+{% block scripts %}
+<!-- Load the AiravataAPI JavaScript SDK (optional) -->
+<script src="{% static 'django_airavata_api/dist/airavata-api.js' %}"></script>
+<script>
+    const { models, services, session, utils } = AiravataAPI;
+
+    utils.FetchUtils.get("/custom_ui_tutorial_app/languages/").then((data) => {
+        data.languages.forEach((language) => {
+            $("#greeting-select").append(
+                `<option value="${language.greeting}">
+                    ${language.lang} - "${language.greeting}"
+                 </option>`
+            );
+        });
+    });
+
+    const appInterfaceId = "Echo_23d67491-1bef-47bd-a0f5-faf069e09773";
+
+    function loadExperiments() {
+
+        return services.ExperimentSearchService
+            .list({limit: 5,
+                [models.ExperimentSearchFields.USER_NAME.name]: session.Session.username,
+                [models.ExperimentSearchFields.APPLICATION_ID.name]: appInterfaceId,
+            })
+            .then(data => {
+                $('#experiment-list').empty();
+                data.results.forEach((exp, index) => {
+                    $('#experiment-list').append(
+                    `<tr>
+                        <td>${exp.name}</td>
+                        <td>${exp.executionId}</td>
+                        <td>${exp.creationTime}</td>
+                        <td>${exp.experimentStatus.name}</td>
+                        <td id="output_${index}"></td>
+                    </tr>`);
+
+                    // If experiment has finished, load full details, then parse the stdout file
+                    if (exp.experimentStatus === models.ExperimentState.COMPLETED) {
+                        services.FullExperimentService.retrieve({
+                            lookup: exp.experimentId,
+                        })
+                            .then((fullDetails) => {
+                                const stdoutDataProductId =
+                                    fullDetails.experiment.experimentOutputs.find(
+                                        (o) => o.name === "Echo-STDOUT"
+                                    ).value;
+                                const stdoutDataProduct =
+                                    fullDetails.outputDataProducts.find(
+                                        (dp) => dp.productUri === stdoutDataProductId
+                                    );
+                                if (
+                                    stdoutDataProduct &&
+                                    stdoutDataProduct.downloadURL
+                                ) {
+                                    return fetch(stdoutDataProduct.downloadURL, {
+                                        credentials: "same-origin",
+                                    }).then((result) => result.text());
+                                }
+                            })
+                            .then((text) => {
+                                $(`#output_${index}`).text(text);
+                            });
+                    }
+                });
+        });
+    }
+
+    loadExperiments();
+    $("#refresh-button").click(loadExperiments);
+
+    $("#run-button").click((e) => {
+        const greeting = $("#greeting-select").val();
+        const loadAppInterface = services.ApplicationInterfaceService.retrieve({
+            lookup: appInterfaceId,
+        });
+        const appDeploymentId =
+            "example-vc.jetstream-cloud.org_Echo_37eb38ac-74c8-4aa4-a037-c656ab5bc6b8";
+        const loadQueues = services.ApplicationDeploymentService.getQueues({
+            lookup: appDeploymentId,
+        });
+        const resourceHostId =
+            "example-vc.jetstream-cloud.org_794fd026-101a-46af-8868-5d7a86f813a1";
+        const queueName = "cloud";
+        const groupResourceProfileId = "fc245311-a7d1-41af-b8ae-a4142989c9a1";
+        const loadWorkspacePrefs = services.WorkspacePreferencesService.get();
+        Promise.all([loadAppInterface, loadWorkspacePrefs, loadQueues])
+            .then(([appInterface, workspacePrefs, queues]) => {
+                const experiment = appInterface.createExperiment();
+                experiment.experimentName = "Echo " + greeting;
+                experiment.projectId = workspacePrefs.most_recent_project_id;
+                const cloudQueue = queues.find((q) => q.queueName === queueName);
+                experiment.userConfigurationData.groupResourceProfileId =
+                    groupResourceProfileId;
+                experiment.userConfigurationData.computationalResourceScheduling.resourceHostId =
+                    resourceHostId;
+                experiment.userConfigurationData.computationalResourceScheduling.totalCPUCount =
+                    cloudQueue.defaultCPUCount;
+                experiment.userConfigurationData.computationalResourceScheduling.nodeCount =
+                    cloudQueue.defaultNodeCount;
+                experiment.userConfigurationData.computationalResourceScheduling.wallTimeLimit =
+                    cloudQueue.defaultWalltime;
+                experiment.userConfigurationData.computationalResourceScheduling.queueName =
+                    queueName;
+                // Copy the selected greeting to the value of the first input
+                experiment.experimentInputs[0].value = greeting;
+
+                return services.ExperimentService.create({ data: experiment });
+            })
+            .then((exp) => {
+                return services.ExperimentService.launch({
+                    lookup: exp.experimentId,
+                });
+            });
+    });
+</script>
+{% endblock scripts %}

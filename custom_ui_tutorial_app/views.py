@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseNotFound
+from django.http import JsonResponse
 from django.shortcuts import render
 
 from airavata_django_portal_sdk import user_storage
@@ -39,3 +40,29 @@ def home(request):
     return render(request, "custom_ui_tutorial_app/home.html", {
         'project_name': "Custom UI Tutorial App"
     })
+
+@login_required
+def hello_world(request):
+    return render(request, "custom_ui_tutorial_app/hello.html")
+
+@login_required
+def languages(request):
+    return JsonResponse({'languages': [{
+        'lang': 'French',
+        'greeting': 'bonjour',
+    }, {
+        'lang': 'German',
+        'greeting': 'guten tag'
+    }, {
+        'lang': 'Hindi',
+        'greeting': 'namaste'
+    }, {
+        'lang': 'Japanese',
+        'greeting': 'konnichiwa'
+    }, {
+        'lang': 'Swahili',
+        'greeting': 'jambo'
+    }, {
+        'lang': 'Turkish',
+        'greeting': 'merhaba'
+    }]})
