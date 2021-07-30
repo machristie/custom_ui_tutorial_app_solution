@@ -117,47 +117,23 @@
 
     $("#run-button").click((e) => {
         const greeting = $("#greeting-select").val();
-        const loadAppInterface = services.ApplicationInterfaceService.retrieve({
-            lookup: appInterfaceId,
-        });
-        const appDeploymentId =
-            "example-vc.jetstream-cloud.org_Echo_37eb38ac-74c8-4aa4-a037-c656ab5bc6b8";
-        const loadQueues = services.ApplicationDeploymentService.getQueues({
-            lookup: appDeploymentId,
-        });
-        const resourceHostId =
-            "example-vc.jetstream-cloud.org_794fd026-101a-46af-8868-5d7a86f813a1";
-        const queueName = "cloud";
-        const groupResourceProfileId = "fc245311-a7d1-41af-b8ae-a4142989c9a1";
-        const loadWorkspacePrefs = services.WorkspacePreferencesService.get();
-        Promise.all([loadAppInterface, loadWorkspacePrefs, loadQueues])
-            .then(([appInterface, workspacePrefs, queues]) => {
-                const experiment = appInterface.createExperiment();
-                experiment.experimentName = "Echo " + greeting;
-                experiment.projectId = workspacePrefs.most_recent_project_id;
-                const cloudQueue = queues.find((q) => q.queueName === queueName);
-                experiment.userConfigurationData.groupResourceProfileId =
-                    groupResourceProfileId;
-                experiment.userConfigurationData.computationalResourceScheduling.resourceHostId =
-                    resourceHostId;
-                experiment.userConfigurationData.computationalResourceScheduling.totalCPUCount =
-                    cloudQueue.defaultCPUCount;
-                experiment.userConfigurationData.computationalResourceScheduling.nodeCount =
-                    cloudQueue.defaultNodeCount;
-                experiment.userConfigurationData.computationalResourceScheduling.wallTimeLimit =
-                    cloudQueue.defaultWalltime;
-                experiment.userConfigurationData.computationalResourceScheduling.queueName =
-                    queueName;
-                // Copy the selected greeting to the value of the first input
-                experiment.experimentInputs[0].value = greeting;
-
-                return services.ExperimentService.create({ data: experiment });
-            })
-            .then((exp) => {
-                return services.ExperimentService.launch({
-                    lookup: exp.experimentId,
-                });
+        // Construct experiment object
+        utils.ExperimentUtils.createExperiment({
+            applicationInterfaceId: appInterfaceId,
+            computeResourceName: "example-vc.jetstream-cloud.org",
+            experimentName: "Echo " + greeting,
+            experimentInputs: {
+                "Input-to-Echo": greeting
+            }
+        }).then(experiment=> {
+            // Save experiment
+            return services.ExperimentService.create({ data: experiment });
+        }).then(experiment => {
+            // Launch experiment
+            return services.ExperimentService.launch({
+                lookup: experiment.experimentId,
             });
+        })
     });
 </script>
 {% endblock scripts %}
