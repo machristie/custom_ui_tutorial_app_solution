@@ -71,7 +71,7 @@
             })
             .then(data => {
                 $('#experiment-list').empty();
-                data.results.forEach((exp, index) => {
+                data.results.forEach(async (exp, index) => {
                     $('#experiment-list').append(
                     `<tr>
                         <td>${exp.name}</td>
@@ -81,32 +81,17 @@
                         <td id="output_${index}"></td>
                     </tr>`);
 
-                    // If experiment has finished, load full details, then parse the stdout file
+                    // If experiment has finished, download and display the stdout file contents
                     if (exp.experimentStatus === models.ExperimentState.COMPLETED) {
-                        services.FullExperimentService.retrieve({
-                            lookup: exp.experimentId,
-                        })
-                            .then((fullDetails) => {
-                                const stdoutDataProductId =
-                                    fullDetails.experiment.experimentOutputs.find(
-                                        (o) => o.name === "Echo-STDOUT"
-                                    ).value;
-                                const stdoutDataProduct =
-                                    fullDetails.outputDataProducts.find(
-                                        (dp) => dp.productUri === stdoutDataProductId
-                                    );
-                                if (
-                                    stdoutDataProduct &&
-                                    stdoutDataProduct.downloadURL
-                                ) {
-                                    return fetch(stdoutDataProduct.downloadURL, {
-                                        credentials: "same-origin",
-                                    }).then((result) => result.text());
-                                }
-                            })
-                            .then((text) => {
-                                $(`#output_${index}`).text(text);
-                            });
+                        const experiment = await services.ExperimentService.retrieve({lookup: exp.experimentId});
+                        const stdoutInput = experiment.getExperimentOutput('Echo-STDOUT');
+                        const dataProductURI = stdoutInput.value;
+                        try {
+                            const stdout = await utils.ExperimentUtils.readDataProduct(dataProductURI);
+                            $(`#output_${index}`).text(stdout);
+                        } catch (error) {
+                            $(`#output_${index}`).text("N/A");
+                        }
                     }
                 });
         });
