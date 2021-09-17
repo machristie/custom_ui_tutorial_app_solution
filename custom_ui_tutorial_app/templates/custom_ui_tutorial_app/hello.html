@@ -91,7 +91,12 @@
                 const dataProductURI = stdoutInput.value;
                 try {
                     const stdout = await utils.ExperimentUtils.readDataProduct(dataProductURI);
-                    $(`#output_${index}`).text(stdout);
+                    // if stdout is null, it means the file wasn't found
+                    if (stdout !== null) {
+                        $(`#output_${index}`).text(stdout);
+                    } else {
+                        $(`#output_${index}`).text("N/A");
+                    }
                 } catch (error) {
                     $(`#output_${index}`).text("N/A");
                 }
