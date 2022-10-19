@@ -4,6 +4,8 @@ from django.http import HttpResponse, HttpResponseNotFound
 from django.http import JsonResponse
 from django.shortcuts import render
 
+from rest_framework.decorators import api_view
+
 from airavata_django_portal_sdk import user_storage
 
 # Create your views here.
@@ -45,7 +47,7 @@ def home(request):
 def hello_world(request):
     return render(request, "custom_ui_tutorial_app/hello.html")
 
-@login_required
+@api_view()
 def languages(request):
     return JsonResponse({'languages': [{
         'lang': 'French',
